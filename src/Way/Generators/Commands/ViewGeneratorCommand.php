@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputArgument;
+use Config;
 
 class ViewGeneratorCommand extends GeneratorCommand {
 
@@ -56,9 +57,19 @@ class ViewGeneratorCommand extends GeneratorCommand {
      */
     protected function getTemplateData()
     {
-        return [
-            'PATH' => $this->getFileGenerationPath()
-        ];
+        $data = $this->option("data") ?: [];
+        if ($data) {
+            $raw = [];
+            array_map(function($str) use (&$raw) {
+                $str = explode("=", trim($str), 2);
+                if (count($str) === 2) {
+                    $raw[$str[0]] = $str[1];
+                }
+            }, explode(",", $data));
+            $data = $raw;
+        }
+        $data['PATH'] = $this->getFileGenerationPath();
+        return $data;
     }
 
     /**
@@ -68,7 +79,17 @@ class ViewGeneratorCommand extends GeneratorCommand {
      */
     protected function getTemplatePath()
     {
-        return $this->getPathByOptionOrConfig('templatePath', 'view_template_path');
+        if ($path = $this->option('templatePath')) {
+            return $path;
+        }
+        $default = $path = Config::get("generators::config.view_template_path");
+        $dir = dirname($path);
+        $view_name = explode(".", $this->argument("viewName"));
+        $path = implode(DIRECTORY_SEPARATOR, [dirname($path), "views", "{$view_name[count($view_name) - 1]}.txt"]);
+        if (file_exists($path)) {
+            return $path;
+        }
+        return $default;
     }
 
     /**
@@ -81,6 +102,18 @@ class ViewGeneratorCommand extends GeneratorCommand {
         return [
             ['viewName', InputArgument::REQUIRED, 'The name of the desired view']
         ];
+    }
+
+    /**
+     * Get the console command options.
+     *
+     * @return array
+     */
+    protected function getOptions()
+    {
+        $return = parent::getOptions();
+        $return[] = ['data', "d", InputOption::VALUE_REQUIRED, "Additional template data."];
+        return $return;
     }
 
 }
